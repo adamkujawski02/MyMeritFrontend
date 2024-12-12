@@ -44,6 +44,12 @@ export default function Navbar() {
       current: location.pathname == "/rewards",
       protected: true,
     },
+    {
+      name: "CodeWars",
+      href: "/sk",
+      current: location.pathname == "/sk",
+      protected: true,
+    },
   ];
 
   return (

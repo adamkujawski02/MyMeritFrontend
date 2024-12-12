@@ -27,7 +27,8 @@
     },
     "baseUrl": "./",
 
-    "checkJs": true
+    "checkJs": true,
+    "esModuleInterop": true,
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
