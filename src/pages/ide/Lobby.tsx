@@ -1,11 +1,17 @@
 import { Client } from '@stomp/stompjs';
 import { useState, useEffect, useCallback } from 'react';
-import { useCookies } from 'react-cookie';
 import UserTaskDTO from '../../models/dtos/UserTaskDTO.ts';
+import {useAuth} from "../../hooks/useAuth.tsx";
+import {User} from "@types";
+import Ide from "../../components/editor_workspace/components/ide/Ide.tsx";
+import MyFile from "../../models/MyFile.ts";
+import {ContentType} from "../../components/editor_workspace/utils/fileUtils.ts";
+import {httpCall} from "../../api/HttpClient.ts";
 
 interface LobbyDetails {
     id: string;
-    opponentName: string;
+    recipient: User;
+    sender: User;
     task: UserTaskDTO;
 }
 
@@ -14,37 +20,15 @@ const Lobby = () => {
     const [lobbyDetails, setLobbyDetails] = useState<LobbyDetails | null>(null);
     const [isInQueue, setIsInQueue] = useState<boolean>(false);
     const [client, setClient] = useState<Client | null>(null);
-    const [ws, setWs] = useState<WebSocket | null>(null);
-
-    const [cookies] = useCookies(['user']);
-    const userToken = cookies['user']?.accessToken;
+    const {accessToken, userData} = useAuth();
 
     useEffect(() => {
-        if (!userToken) return;
+        if (!accessToken) return;
 
-        // Create WebSocket connection
-        const socket = new WebSocket('ws://localhost:8080/gs-guide-websocket');
 
-        socket.onopen = () => {
-            console.log('WebSocket connection established');
-            setWs(socket);
-        };
-
-        socket.onerror = (err) => {
-            console.error('WebSocket connection error:', err);
-        };
-
-        socket.onclose = () => {
-            console.log('WebSocket connection closed');
-        };
-
-        // Integrating STOMP client over WebSocket
         const stompClient = new Client({
-            brokerURL: 'ws://localhost:8080/gs-guide-websocket',
-            connectHeaders: {
-                login: 'user',
-                passcode: 'password',
-            },
+            brokerURL: 'ws://localhost:8080/ws',
+            connectHeaders: { Authorization: `Bearer ${accessToken}` },
             debug: (msg) => console.log(msg),
             reconnectDelay: 5000,
             heartbeatIncoming: 4000,
@@ -64,40 +48,96 @@ const Lobby = () => {
         stompClient.activate();
         setClient(stompClient);
 
-        // Cleanup connection on component unmount
+
         return () => {
             if (stompClient.connected) stompClient.deactivate();
-            if (socket.readyState === WebSocket.OPEN) socket.close();
         };
-    }, [userToken]);
+    }, []);
 
     const joinQueue = useCallback(() => {
-        if (userToken && client && client.connected) {
-            client.send('/app/joinQueue', {}, JSON.stringify({ token: userToken }));
+        if (accessToken && client && client.connected) {
+            client.publish({destination: '/app/findMatch', headers: { Authorization: `Bearer ${accessToken}` },
+                body:    JSON.stringify({ id: userData!.id}) }
+            );
             setQueueStatus('Joined the queue. Waiting...');
             setIsInQueue(true);
         }
-    }, [client, userToken]);
+    }, [client, userData]);
 
-    const findOpponent = useCallback(() => {
-        if (userToken && client && client.connected) {
-            client.send('/app/findOpponent', {}, JSON.stringify({ token: userToken }));
-        }
-    }, [client, userToken]);
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                if(userData && userData.id){
 
+                    const URL = import.meta.env.VITE_API_URL + "/maintainLobby?id=" + userData!.id
+                    const response = await httpCall<LobbyDetails>({
+                        url: URL,
+                        method: "GET",
+                    }); console.log(response);
+                    if(Object.values(response).length > 0){setLobbyDetails(response)}
+
+                }
+
+
+
+            } catch (error) {
+                console.error("Error fetching data", error);
+            }
+        };
+
+        fetchData();
+    }, [userData]);
+   console.log(lobbyDetails)
     return (
         <div>
             <h1>Lobby</h1>
             {queueStatus && <p>Status: {queueStatus}</p>}
 
             {!isInQueue && <button onClick={joinQueue}>Join Queue</button>}
-            {isInQueue && <button onClick={findOpponent}>Find Opponent</button>}
 
             {lobbyDetails && (
                 <div>
-                    <h2>Details</h2>
-                    <p>Lobby ID: {lobbyDetails.id}</p>
-                    <p>Opponent: {lobbyDetails.opponentName}</p>
+
+                    <Ide
+                        files={[
+                            new MyFile("main.js",ContentType.TXT, btoa("console.log('Hello World');")),
+                        ]}
+                        currentFileIndex={0}
+                        setFiles={(updatedFiles: MyFile[]) => {
+                            console.log("Updated files:", updatedFiles);
+                        }}
+                        currentLanguage= {"JAVASCRIPT"}
+                        setAsMain={(index: string) => {
+                            console.log(`File ${index} set as main`);
+                        }}
+                        mainFileIndex={0}
+                        isEditable={true}
+                        isFeedbackView={false}
+                        originalFiles={[
+                            new MyFile("main.js", "text/javascript", btoa("console.log('Original Code');")),
+                        ]}
+                        submitComponent={<button onClick={() => console.log("Solution submitted!")}>Submit</button>}
+                        task={
+                            new UserTaskDTO(
+                                "task1",
+                                "Sample Task",
+                                "Implement the function to solve the task.",
+                                new Date(),
+                                new Date(Date.now() + 86400000),
+                                100,
+                                ["javascript", "python"],
+                                200000,
+                                15.0,
+                                "OPEN",
+                                null,
+                                [],
+                                "job-123",
+                                null
+                            )
+                        }
+                        submitSolution={() => console.log("Solution submitted")}
+                    />)
+
                 </div>
             )}
         </div>

@@ -22,7 +22,6 @@ import NewTask from "./pages/new_task/NewTask";
 import Ranking from "./pages/ranking/Ranking";
 import User from "./pages/user/User";
 import Redirect404 from "./pages/Redirect404";
-import {Ide2} from "./pages/ide/LobbyQueue.tsx";
 import Lobby from "./pages/ide/Lobby.tsx";
 
 const App = () => {
